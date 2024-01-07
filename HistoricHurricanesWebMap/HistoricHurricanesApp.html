@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <title>Historic Hurricanes Tracks</title>
+    <link rel="stylesheet" href ="Lesson8.css"></link>
+    <link rel="stylesheet" href="https://js.arcgis.com/4.27/esri/themes/light/main.css" />
+    <script src="https://js.arcgis.com/4.27/"></script>
+    <script src="Lesson8.js"></script>  
+  </head>
+  <body>
+    <div class="panel-container">
+      <div class="panel-side esri-widget">
+        <h3>Hurricane Track Feature</h3>
+        <ul id="hurricanesInYear">
+          <li>Loading&hellip;</li>
+        </ul>
+      </div>
+      <div id="viewDiv"></div>
+    </div>
+    <div id="infoDiv" class="esri-widget">
+      Hurricanes by Year:
+    <div id="year" class="slider"></div>
+    </div>
+  </body>
+</html>
