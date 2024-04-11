@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+    <html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        <title>Colorado Long-Term Drought Blend</title>
+          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.2.0/leaflet.css" type="text/css" crossorigin="">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.2.0/leaflet.js" crossorigin=""></script>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+        <script src="ColoradoHUCs.js"></script>
+        <link rel="stylesheet" href="style.css" type="text/css">
+        <style>
+            /*Legend specific*/
+            .legend {
+                padding: 6px 8px;
+                font: 14px Arial, Helvetica, sans-serif;
+                background: white;
+                background: rgba(255, 255, 255, 0.8);
+                line-height: 24px;
+                color: #555;
+                }
+            .legend h4 {
+                text-align: center;
+                font-size: 16px;
+                margin: 2px 12px 8px;
+                color: #777;
+                }
+
+            .legend span {
+                position: relative;
+                bottom: 3px;
+                }
+
+            .legend i {
+                width: 18px;
+                height: 18px;
+                float: left;
+                margin: 0 8px 0 0;
+                opacity: 0.7;
+                }
+
+            .legend i.icon {
+                background-size: 18px;
+                background-color: rgba(255, 255, 255, 1);
+                }
+
+        </style>
+        <script type="text/javascript">
+        var map;
+        function init() {
+
+            var Hucs;
+            var selection;
+            var selectedLayer;
+
+
+        // create map and set center and zoom level
+            map = new L.map('mapid');
+            map.setView([39.501,-105.7819],6);
+        // create tile layer and add it to map
+            var tiles = L.tileLayer('https://geog585-pmo49.s3.us-east-2.amazonaws.com/FinalProjectBasemap/{z}/{x}/{y}.png');
+            tiles.addTo(map);
+        // create wms layer
+        var droughtBlend = L.tileLayer.wms('http://localhost:8080/geoserver/geog585/wms', {
+                layers: 'geog585:ColoradoLongTermBlend',
+                format: 'image/png',
+                transparent: true
+            });
+            
+            droughtBlend.addTo(map);
+
+            // add the Hucs GeoJSON layer using the ColoradoHUCs Data variable from ColoradoHUCs.js
+            var Hucs = new L.geoJSON(ColoradoHUCs,{
+                style: HucStyle,
+                onEachFeature: HucOnEachFeature
+            });       
+            //Hucs.addTo(map);
+
+            var mapToggles = {
+                "Basemap": droughtBlend
+            };
+            
+            //var defaultLayer = Hucs;
+            var layerControl = new L.control.layers(mapToggles).addTo(map);
+            layerControl.addOverlay(Hucs,"Hydrologic Unit Code (HUC)")
+            //defaultLayer.addTo(map);
+
+            // define the styles for the Huc layer (unselected and selected)
+            function HucStyle(feature) {
+            return {
+                fillColor: "#0070FF",
+                fillOpacity: 0,
+                color: '#0284f5',
+                };
+            }
+
+            function HucSelectedStyle(feature) {
+            return {
+                fillColor: "#00FFFB",
+                color: '#0000FF',
+                fillOpacity: 0.5
+                };
+            }
+
+            // handle click events on Huc features
+            function HucOnEachFeature(feature, layer){
+                layer.on({
+                click: function(e) {
+                    if (selection) {            
+                        resetStyles();
+                    }
+              
+                    e.target.setStyle(HucSelectedStyle());
+                    selection = e.target;
+                    selectedLayer = Hucs;
+
+            // Insert some HTML with the feature name
+                    buildSummaryLabel(feature);
+
+                    L.DomEvent.stopPropagation(e); // stop click event from being propagated further
+                    }
+                });
+            }
+
+            // define event handler function for click events and register it
+            function Identify(e){           
+            // set parameters needed for GetFeatureInfo WMS request
+            var sw = map.options.crs.project(map.getBounds().getSouthWest());
+            var ne = map.options.crs.project(map.getBounds().getNorthEast());
+            var BBOX = sw.x + "," + sw.y + "," + ne.x + "," + ne.y;
+            var WIDTH = map.getSize().x;
+            var HEIGHT = map.getSize().y;
+            var X = Math.trunc(map.layerPointToContainerPoint(e.layerPoint).x);
+            var Y = Math.trunc(map.layerPointToContainerPoint(e.layerPoint).y);
+            // compose the URL for the request
+            var URL = 'http://localhost:8080/geoserver/geog585/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo&LAYERS=geog585:ColoradoLongTermBlend&QUERY_LAYERS=geog585:ColoradoLongTermBlend&BBOX='+BBOX+'&FEATURE_COUNT=1&HEIGHT='+HEIGHT+'&WIDTH='+WIDTH+'&INFO_FORMAT=application%2Fjson&TILED=false&CRS=EPSG%3A3857&I='+X+'&J='+Y;
+            //send GetFeatureInfo as asynchronous HTTP request using jQuery $.ajax
+            $.ajax({
+                url: URL,
+                dataType: "json",
+                type: "GET",
+                success: function(data)
+                {
+                    if(data) {  // at least one feature returned in response
+                    var returnedFeature = data.features[0].properties.GREY_INDEX; // first feature from response
+            
+            // Set up popup for clicked feature and open it
+                    var popup = new L.Popup({
+                    maxWidth: 300
+                    });
+
+                    popup.setContent("<b>" + 'Long-Term Drought Blend Value' + "</b><br />" + returnedFeature);
+                    popup.setLatLng(e.latlng);
+                    map.openPopup(popup);
+                    }
+                }
+            });
+        }
+            map.addEventListener('click', Identify);
+
+
+            map.addEventListener('click', function(e) {
+                if (selection) {
+                    resetStyles();
+                    selection = null;
+                    document.getElementById('summaryLabel').innerHTML = '<p>Click a Huc on the map to get more information.</p>';
+                }
+            });
+            // function to set the old selected feature back to its original symbol. Used when the map or a feature is clicked.
+            function resetStyles(){
+               if (selectedLayer === Hucs) selectedLayer.resetStyle(selection);
+            }           
+            // function to build the HTML for the summary label using the selected feature's "name" property
+            function buildSummaryLabel(currentFeature){
+                var featureName = currentFeature.properties.name || "Unnamed feature";
+                var area = currentFeature.properties.areasqkm || "Unnamed feature";
+                document.getElementById('summaryLabel').innerHTML = '<p style="font-size:18px"><b>' + "HUC: " + featureName + '</b></p>'+ '<p style="font-size:18px">Total HUC Area in Square Kilometers: ' +area+ '</p>';
+            }
+              /*Legend specific*/
+        var legend = L.control({ position: "bottomleft" });
+
+        legend.onAdd = function(map) {
+            var div = L.DomUtil.create("div", "legend");
+            div.innerHTML += "<h4>Colorado Features</h4>";
+            div.innerHTML += '<i style="background: #0284f5"></i><span>HUC</span><br>';
+            div.innerHTML += '<i style="background: #007606"></i><span>Current Agricultural Lease</span><br>';
+            div.innerHTML += '<i style="background: #777777"></i><span>County</span><br>';
+            div.innerHTML += '<i style="background: #aaaaaa"></i><span>Major Road</span><br>';
+   
+            return div;
+        };
+
+
+
+        legend.addTo(map);
+
+        }  
+            
+        </script>
+      </head>
+      <body onload="init()">
+        <h1 id="title">Colorado Long-Term Drought Trends</h1>
+    
+        <div id="mapid">
+        </div>
+        <div id="summaryLabel">
+            <p>Turn on the Huc layer and click a Huc on the map to get more information.</p>
+        </div>
+        <div id="docs">
+            <p>This page shows the long-term drought blend in Colorado using data from Climate Engine.<br>
+            Click a pixel to get the drought blend value.<br>
+            For more information about drought blends, visit: https://support.climateengine.org/article/43-drought-blends</br>
+            For more information about the drought blend dataset, visit: https://support.climateengine.org/article/45-gridmet-drought</p>
+        </div>
+
+      </body>
+    </html>
